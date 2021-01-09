@@ -7,3 +7,6 @@ catboost_info
 mlruns
 
 data
+
+notebooks/poc/logs.log
+airflow/airflow.db
