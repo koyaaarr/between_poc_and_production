@@ -10,3 +10,6 @@ data
 
 notebooks/poc/logs.log
 airflow/airflow.db
+
+*.pid
+*.pyc
