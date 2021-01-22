@@ -13,3 +13,5 @@ airflow/airflow.db
 
 *.pid
 *.pyc
+
+*.pptx
