@@ -1,52 +1,53 @@
 from datetime import timedelta
-
 from airflow import DAG
 from airflow.operators.bash import BashOperator
-
-# from airflow.operators.dummy import DummyOperator
 from airflow.utils.dates import days_ago
 
 args = {
     "owner": "admin",
 }
 
+
 dag = DAG(
     dag_id="trial_operation",
     default_args=args,
-    schedule_interval="0 0 * * *",
+    schedule_interval=None,
     start_date=days_ago(2),
     dagrun_timeout=timedelta(minutes=60),
     # tags=[],
-    # params={},
+    params={
+        "target_date": "20210101",
+        "work_dir": "~/Code/between_poc_and_production/notebooks/trial/",
+    },
 )
 
 accumulate = BashOperator(
     task_id="accumulate_train_data",
-    bash_command="papermill --cwd ~/Code/between_poc_and_production/notebooks/trial/ ~/Code/between_poc_and_production/notebooks/trial/accmulate.ipynb ~/Code/between_poc_and_production/notebooks/trial/logs/accmulate.ipynb -p TARGET_DATE 20210101",
+    bash_command="papermill --cwd {{ dag_run.conf['work_dir'] }} {{ dag_run.conf['work_dir'] }}accmulate.ipynb {{ dag_run.conf['work_dir'] }}logs/accmulate.ipynb -p TARGET_DATE {{ dag_run.conf['target_date'] }}",
     dag=dag,
 )
 
 feat_eng_train = BashOperator(
     task_id="feature_engineering_train_data",
-    bash_command="papermill --cwd ~/Code/between_poc_and_production/notebooks/trial/ ~/Code/between_poc_and_production/notebooks/trial/feature_engineering.ipynb ~/Code/between_poc_and_production/notebooks/trial/logs/feature_engineering.ipynb -p TARGET_DATE 20210101 -p DATA_TYPE train",
+    bash_command="papermill --cwd {{ dag_run.conf['work_dir'] }} {{ dag_run.conf['work_dir'] }}feature_engineering.ipynb {{ dag_run.conf['work_dir'] }}logs/feature_engineering.ipynb -p TARGET_DATE {{ dag_run.conf['target_date'] }} -p DATA_TYPE train",
     dag=dag,
 )
 
 feat_eng_test = BashOperator(
     task_id="feature_engineering_test_data",
-    bash_command="papermill --cwd ~/Code/between_poc_and_production/notebooks/trial/ ~/Code/between_poc_and_production/notebooks/trial/feature_engineering.ipynb ~/Code/between_poc_and_production/notebooks/trial/logs/feature_engineering.ipynb -p TARGET_DATE 20210101 -p DATA_TYPE test",
+    bash_command="papermill --cwd {{ dag_run.conf['work_dir'] }} {{ dag_run.conf['work_dir'] }}feature_engineering.ipynb {{ dag_run.conf['work_dir'] }}logs/feature_engineering.ipynb -p TARGET_DATE {{ dag_run.conf['target_date'] }} -p DATA_TYPE test",
     dag=dag,
 )
 
 learn = BashOperator(
     task_id="learn",
-    bash_command="papermill --cwd ~/Code/between_poc_and_production/notebooks/trial/ ~/Code/between_poc_and_production/notebooks/trial/learn.ipynb ~/Code/between_poc_and_production/notebooks/trial/logs/learn.ipynb -p TARGET_DATE 20210101",
+    bash_command="papermill --cwd {{ dag_run.conf['work_dir'] }} {{ dag_run.conf['work_dir'] }}learn.ipynb {{ dag_run.conf['work_dir'] }}logs/learn.ipynb -p TARGET_DATE {{ dag_run.conf['target_date'] }}",
     dag=dag,
 )
 
 inference = BashOperator(
     task_id="inference",
-    bash_command="papermill --cwd ~/Code/between_poc_and_production/notebooks/trial/ ~/Code/between_poc_and_production/notebooks/trial/inference.ipynb ~/Code/between_poc_and_production/notebooks/trial/logs/inference.ipynb -p TARGET_DATE 20210101",
+    bash_command="papermill --cwd {{ dag_run.conf['work_dir'] }} {{ dag_run.conf['work_dir'] }}inference.ipynb {{ dag_run.conf['work_dir'] }}logs/inference.ipynb -p TARGET_DATE {{ dag_run.conf['target_date'] }}",
     dag=dag,
 )
 
