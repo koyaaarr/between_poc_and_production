@@ -26,6 +26,15 @@
 
 コンサルテーションに関するスキルは、不確実なことの多い機械学習プロジェクトにおいて大変重要な点ですが、本記事では技術にフォーカスするため記載しません。
 
+#### 本記事で想定するシステム
+
+- 数GB〜数十GBの比較的小規模なデータを利用する
+  - 数億レコード級のデータではなく、メモリに載るサイズのデータを扱う
+- バッチ学習、バッチ推論を行う
+  - オンライン(リアルタイム)での学習・推論は行わない
+- データ分析とシステム構築を並行して進める
+  - 作るべきものは決まっておらず、走りながら必要に応じて作っていく
+
 #### 本記事で利用するデータ
 
 - [Home Credit Default Risk](https://www.kaggle.com/c/home-credit-default-risk/data) のデータを使用する
@@ -38,7 +47,7 @@
 
 この仮定をした上で、説明の都合上、本コンペティションで利用できるデータのうち、「application_train.csv」を図のように分割して利用します。分割したデータはそれぞれ以下を仮定しています。
 
-- 「initial.csv」：過去の与信情報。PoC を始める際に提供されたデータ
+- 「initial.csv」：過去の与信情報。PoC で利用する
 - 「20201001.csv」：2020 年 10 月分の与信情報。テスト運用ではこのデータは「initial.csv」と合わせて訓練データとして扱う
 - 「20201101.csv」：2020 年 11 月分の与信情報。テスト運用ではこのデータは「initial.csv」と合わせて訓練データとして扱う
 - 「20201201.csv」：2020 年 12 月分の与信情報。テスト運用ではこのデータは「initial.csv」と合わせて訓練データとして扱う
@@ -94,9 +103,9 @@ train.iloc[len(train)-10000:,:].to_csv('../data/poc/20210101.csv', index=False)
 
 ##### このフェーズでのアーキテクチャ
 
-このフェーズでは JupyterLab だけで作業を進めていきます。
+このフェーズでは JupyterLab だけで作業を進めていきます。機械学習モデルの保存のためにMlflowを記載していますが、最初期には必要ないと(個人的には)思っています。
 
-アーキテクチャ図;JupyterLab のみ
+![architecture_poc](/Users/koyajima/Code/between_poc_and_production/images/architecture_poc.png)
 
 #### データの妥当性検証
 
@@ -491,7 +500,7 @@ PoC の結果をビジネス部門に報告し、仮にこの PoC のシステ�
 
 #### 補足：機械学習モデルの管理
 
-TODO:MLflow の導入
+機械学習モデルの管理には、[MLflow](https://github.com/mlflow/mlflow) が便利です。本記事では詳細は省きますが、Optunaで探索した各ハイパーパラメータでのモデルを管理できたり、モデルの改善数が多くなるにつれて力を発揮します。
 
 ### テスト運用
 
@@ -513,17 +522,19 @@ PoC から本番運用に行くまでには運用の自動化や推論単体の�
 
 PoC では 1 つの JupyterNotebook のみを使っていましたが、このフェーズからは複数の Notebook に分割します。これらの Notebook を順番に実行できるように、新たに 2 つの OSS を導入します。1 つは「[papermill](https://github.com/nteract/papermill)」で、この OSS は JupyterNotebook をコマンドラインから実行でき、かつ実行時にパラメータを渡すことができます。これにより、例えば実行する月をパラメータとして渡すことで、Notebook の中身を書き換えることなく異なる月の予測ができるようになります。さらに、各 Notebook を順番に実行するために「[Airflow](https://airflow.apache.org/)」を使用します。この OSS は自動実行だけでなく、スケジューリング実行や成功通知・失敗通知など、運用自動化に便利な機能を備えています。
 
-TODO；アーキテクチャ図;JupyterLab, papermill, Airflow
+![architecture_trial1](/Users/koyajima/Code/between_poc_and_production/images/architecture_trial1.png)
 
 ##### データパイプライン
 
-PoC で作成したプログラムを、「データ蓄積」「特徴量エンジニアリング」「学習」「推論」の４つのブロックに分割します。ブロックに分けるときは、各ブロック同士はデータをインターフェースとすることで、疎結合になるようにします。これによって、プログラムのロジックの変更に伴う影響範囲を限定させます。各ブロックでは、プログラムのはじめに papermill からパラメータとして実行月を渡せるように設定しておき、特定の月での実行ができるようにします。例えば、2021 年 1 月分に運用する際のイメージは以下にようになります。
+PoC で作成したプログラムを、「データ蓄積」「特徴量エンジニアリング」「学習」「推論」の４つのブロックに分割します。ブロックに分けるときは、各ブロック同士はデータをインターフェースとすることで、疎結合になるようにします。これによって、プログラムのロジックの変更に伴う影響範囲を限定させます。参考までに、データパイプラインのイメージを記載します。各ブロックでは、プログラムのはじめに papermill からパラメータとして実行月を渡せるように設定しておき、特定の月での実行ができるようにします。
 
-TODO：運用イメージ
+![data_pipeline](/Users/koyajima/Code/between_poc_and_production/images/data_pipeline.png)
 
 以下には各ブロックのコードを記載します。基本的には PoC で使用したプログラムの再利用で、運用自動化のために多少の追加・修正をしています。
 
 ##### 1. データ蓄積
+
+**accumulate.ipynb**
 
 ```python
 # パラメータ設定
@@ -563,6 +574,8 @@ train.to_pickle(f'../../data/trial/accumulate_{TARGET_DATE}.pkl')
 ```
 
 ##### 2. 特徴量エンジニアリング
+
+**feature_engineering.ipynb**
 
 ```python
 # パラメータ設定
@@ -662,6 +675,8 @@ elif DATA_TYPE == 'test':
 ```
 
 ##### 3. 学習
+
+**learn.ipynb**
 
 ```python
 # パラメータ設定
@@ -816,6 +831,8 @@ pickle.dump(model, open(f'../../data/trial/model_{TARGET_DATE}.pkl', 'wb'))
 
 ##### 4. 推論
 
+**inference.ipynb**
+
 ```python
 # パラメータ設定
 TARGET_DATE = '20210101'
@@ -863,56 +880,59 @@ pred.to_csv(f'../../data/trial/pred_{TARGET_DATE}.csv', index=None)
 
 各処理が個別のプログラムに分割できたら、Airflow を利用して、それらを順序立てて実行できるようにします。実行時にパラメータとして予測月を渡すことで、その月の実行を行うことができます。また、「schedule_interval」に cron 式でスケジューリング実行の日時を定義できます。以下に、2021 年 1 月分を実行する場合の Airflow のコードを記載します。
 
+**trial_operation.py**
+
 ```python
 from datetime import timedelta
-
 from airflow import DAG
 from airflow.operators.bash import BashOperator
-
-# from airflow.operators.dummy import DummyOperator
 from airflow.utils.dates import days_ago
 
 args = {
     "owner": "admin",
 }
 
+
 dag = DAG(
     dag_id="trial_operation",
     default_args=args,
-    schedule_interval="0 0 * * *",
+    schedule_interval=None,
     start_date=days_ago(2),
     dagrun_timeout=timedelta(minutes=60),
     # tags=[],
-    params={'target_date': '20210101'},
+    params={
+        "target_date": "20210101",
+        "work_dir": "~/Code/between_poc_and_production/notebooks/trial/",
+    },
 )
 
 accumulate = BashOperator(
     task_id="accumulate_train_data",
-    bash_command="papermill --cwd ~/Code/between_poc_and_production/notebooks/trial/ ~/Code/between_poc_and_production/notebooks/trial/accmulate.ipynb ~/Code/between_poc_and_production/notebooks/trial/logs/accmulate.ipynb -p TARGET_DATE 20210101",
+    bash_command="papermill --cwd {{ dag_run.conf['work_dir'] }} {{ dag_run.conf['work_dir'] }}accmulate.ipynb {{ dag_run.conf['work_dir'] }}logs/accmulate.ipynb -p TARGET_DATE {{ dag_run.conf['target_date'] }}",
     dag=dag,
 )
 
 feat_eng_train = BashOperator(
     task_id="feature_engineering_train_data",
-    bash_command="papermill --cwd ~/Code/between_poc_and_production/notebooks/trial/ ~/Code/between_poc_and_production/notebooks/trial/feature_engineering.ipynb ~/Code/between_poc_and_production/notebooks/trial/logs/feature_engineering.ipynb -p TARGET_DATE 20210101 -p DATA_TYPE train",
+    bash_command="papermill --cwd {{ dag_run.conf['work_dir'] }} {{ dag_run.conf['work_dir'] }}feature_engineering.ipynb {{ dag_run.conf['work_dir'] }}logs/feature_engineering.ipynb -p TARGET_DATE {{ dag_run.conf['target_date'] }} -p DATA_TYPE train",
     dag=dag,
 )
 
 feat_eng_test = BashOperator(
     task_id="feature_engineering_test_data",
-    bash_command="papermill --cwd ~/Code/between_poc_and_production/notebooks/trial/ ~/Code/between_poc_and_production/notebooks/trial/feature_engineering.ipynb ~/Code/between_poc_and_production/notebooks/trial/logs/feature_engineering.ipynb -p TARGET_DATE 20210101 -p DATA_TYPE test",
+    bash_command="papermill --cwd {{ dag_run.conf['work_dir'] }} {{ dag_run.conf['work_dir'] }}feature_engineering.ipynb {{ dag_run.conf['work_dir'] }}logs/feature_engineering.ipynb -p TARGET_DATE {{ dag_run.conf['target_date'] }} -p DATA_TYPE test",
     dag=dag,
 )
 
 learn = BashOperator(
     task_id="learn",
-    bash_command="papermill --cwd ~/Code/between_poc_and_production/notebooks/trial/ ~/Code/between_poc_and_production/notebooks/trial/learn.ipynb ~/Code/between_poc_and_production/notebooks/trial/logs/learn.ipynb -p TARGET_DATE 20210101",
+    bash_command="papermill --cwd {{ dag_run.conf['work_dir'] }} {{ dag_run.conf['work_dir'] }}learn.ipynb {{ dag_run.conf['work_dir'] }}logs/learn.ipynb -p TARGET_DATE {{ dag_run.conf['target_date'] }}",
     dag=dag,
 )
 
 inference = BashOperator(
     task_id="inference",
-    bash_command="papermill --cwd ~/Code/between_poc_and_production/notebooks/trial/ ~/Code/between_poc_and_production/notebooks/trial/inference.ipynb ~/Code/between_poc_and_production/notebooks/trial/logs/inference.ipynb -p TARGET_DATE 20210101",
+    bash_command="papermill --cwd {{ dag_run.conf['work_dir'] }} {{ dag_run.conf['work_dir'] }}inference.ipynb {{ dag_run.conf['work_dir'] }}logs/inference.ipynb -p TARGET_DATE {{ dag_run.conf['target_date'] }}",
     dag=dag,
 )
 
@@ -944,17 +964,17 @@ Airflow では定義したワークフローをフローチャートのように
   2. Airflow からワークフローを実行する
   3. 予測結果をダウンロードする
 
-#### テスト運用フェーズ 2：学習・推論 API の実装
+#### テスト運用フェーズ 2：定形運用API の実装
 
 ##### このフェーズでの目的
 
-フェーズ 1 では、前処理や推論などの機能を個別のプログラムに分割し、papermill と Airflow を組み合わせることで、毎月の運用を大幅に自動化できました。このフェーズ 2 では、更に自動化を進めていきます。具体的には、フェーズ 1 で手作業としていたデータのアップロード・ダウンロードの実行、定形運用の実行、推論の個別実行について、それぞれの API とそれを GUI から実行できる画面を用意します。これにより、ビジネス部門をはじめとする非エンジニアのユーザでも簡単に運用ができるようにします。こうすることで、定型的な運用をユーザに任せることができ、エンジニアは開発作業により集中することができます。
+フェーズ 1 では、前処理や推論などの機能を個別のプログラムに分割し、papermill と Airflow を組み合わせることで、毎月の運用を大幅に自動化できました。このフェーズ 2 では、更に自動化を進めていきます。具体的には、フェーズ 1 で手作業としていたデータのアップロード・ダウンロードの実行、定形運用の実行について、それぞれの API とそれを GUI から実行できる画面を用意します。これにより、ビジネス部門をはじめとする非エンジニアのユーザでも簡単に運用ができるようにします。こうすることで、定型的な運用をユーザに任せることができ、エンジニアは開発作業により集中することができます。
 
 ##### このフェーズでのアーキテクチャ
 
 フェーズ 2 では、新たに Web サーバを立て、それを操作できる画面を作ります。
 
-アーキテクチャ図;JupyterLab, papermill, Airflow, FastAPI, React
+![architecture_trial2](/Users/koyajima/Code/between_poc_and_production/images/architecture_trial2.png)
 
 ##### Web サーバの作成
 
@@ -967,14 +987,23 @@ Web サーバには以下の API を用意します。
 
 今回は[FastAPI](https://github.com/tiangolo/fastapi) を利用して Web サーバを作成します。
 
+**server.py**
+
 ```python
-from fastapi import FastAPI
-import subprocess
+from fastapi import FastAPI, File, UploadFile
+import os
+import shutil
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel  # リクエストbodyを定義するために必要
+from pydantic import BaseModel
+from fastapi.responses import FileResponse
+from airflow.api.client.local_client import Client
+
+
+ALLOWED_EXTENSIONS = set(["csv"])
+UPLOAD_FOLDER = "./upload"
+DOWNLOAD_FOLDER = "./download/"
 
 app = FastAPI()
-
 
 origins = [
     "http://localhost",
@@ -990,33 +1019,77 @@ app.add_middleware(
 )
 
 
-class LearnParam(BaseModel):
-    test: str
+class PredictParam(BaseModel):
+    target_date: str
 
 
-# curl -X POST http://localhost:8000/hello -H "Content-Type: application/json" -d "{'test':'hello'}"
-@app.post("/hello")  # methodとendpointの指定
-async def hello(param: LearnParam):
-    print(param)
-    # subprocess.call("airflow dags trigger test_dag".split(" "))
-    return {"text": param}
+def allowed_file(filename):
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+@app.post("/api/v1/upload-trial-input")
+async def upload(file: UploadFile = File(...)):
+    if file and allowed_file(file.filename):
+        filename = file.filename
+        fileobj = file.file
+        upload_dir = open(os.path.join(UPLOAD_FOLDER, filename), "wb+")
+        shutil.copyfileobj(fileobj, upload_dir)
+        upload_dir.close()
+        return {"result": "Success", "message": f"successfully uploaded: {filename}"}
+    if file and not allowed_file(file.filename):
+        return {
+            "result": "Failed",
+            "message": "file is not uploaded or extension is not allowed",
+        }
+
+
+@app.post("/api/v1/execute-trial-operation")
+async def execute(param: PredictParam):
+    try:
+        c = Client(None, None)
+        c.trigger_dag(
+            dag_id="trial_operation",
+            conf={
+                "target_date": param.target_date,
+                "work_dir": "~/Code/between_poc_and_production/notebooks/trial/",
+            },
+        )
+        return {"result": "Success", "message": "successfully triggered"}
+    except Exception as e:
+        return {"result": "Failed", "message": f"error occured: {e}"}
+
+
+@app.get("/api/v1/download-trial-output")
+async def download():
+    return FileResponse(
+        DOWNLOAD_FOLDER + "pred_20210101.csv",
+        filename="pred_20210101.csv",
+        media_type="text/csv",
+    )
+
 
 ```
 
 ##### GUI の作成
 
-GUI では Web サーバの API を実行できるボタンと、データをアップロードできるフォームを用意します。今回は[React](https://github.com/facebook/react) と[Typescript](https://github.com/microsoft/TypeScript) を利用して自前で作成していますが、画面自体を作成するライブラリを用いたほうが素早く作成できるかもしれません。
+GUI では Web サーバの API を実行できるボタンと、データをアップロードできるフォームを用意します。今回は[React](https://github.com/facebook/react) と[Typescript](https://github.com/microsoft/TypeScript) を利用して自前で作成していますが、[streamlit](https://github.com/streamlit/streamlit) などの画面自体を作成するライブラリを用いたほうが素早く作成できるかもしれません。
+
+**App.tsx**
 
 ```react
 import React from 'react';
-import logo from './logo.svg';
+import { useState } from 'react';
 import './App.css';
 import { makeStyles, createStyles, Theme } from '@material-ui/core/styles';
-import Button from '@material-ui/core/Button';
-import AppBar from '@material-ui/core/AppBar';
-import { Toolbar } from '@material-ui/core';
-import IconButton from '@material-ui/core/IconButton/IconButton';
-import Typography from '@material-ui/core/Typography/Typography';
+import {
+  Toolbar,
+  Button,
+  AppBar,
+  TextField,
+  Divider,
+  Input,
+  Typography,
+} from '@material-ui/core';
 
 const useStyles = makeStyles((theme: Theme) =>
   createStyles({
@@ -1025,27 +1098,61 @@ const useStyles = makeStyles((theme: Theme) =>
         margin: theme.spacing(1),
       },
     },
-    menuButton: {},
+    titleText: {
+      paddingTop: '15px',
+      paddingLeft: '15px',
+    },
+    dateForm: {
+      paddingTop: '10px',
+      paddingLeft: '15px',
+    },
+    fileForm: {
+      paddingLeft: '15px',
+      paddingBottom: '10px',
+    },
+    button: {
+      paddingLeft: '15px',
+    },
   })
 );
 
 const App: React.FC = () => {
   const classes = useStyles();
+  const [selectedFile, setSelectedFile] = useState<unknown | null>();
+  const [executeDate, setExecuteDate] = useState('20210101');
+
+  const changeHandler = (event: any) => {
+    setSelectedFile(event.target.files[0]);
+  };
+
+  const handelExecuteDate = (event: any) => {
+    setExecuteDate(event.target.value);
+  };
+
+  const handleSubmission = () => {
+    const formData = new FormData();
+    formData.append('file', selectedFile as string);
+
+    fetch('http://localhost:8000/api/v1/upload-trial-input', {
+      method: 'POST',
+      body: formData,
+    })
+      .then((response) => response.json())
+      .then((result) => {
+        console.log(result);
+      });
+  };
+
   async function postData(url = '', data = {}) {
-    // 既定のオプションには * が付いています
     const response = await fetch(url, {
-      method: 'POST', // *GET, POST, PUT, DELETE, etc.
-      // mode: 'cors', // no-cors, *cors, same-origin
-      // cache: 'no-cache', // *default, no-cache, reload, force-cache, only-if-cached
-      // credentials: 'same-origin', // include, *same-origin, omit
+      method: 'POST',
+      mode: 'cors',
       headers: {
         'Content-Type': 'application/json',
       },
-      // redirect: 'follow', // manual, *follow, error
-      // referrerPolicy: 'no-referrer', // no-referrer, *no-referrer-when-downgrade, origin, origin-when-cross-origin, same-origin, strict-origin, strict-origin-when-cross-origin, unsafe-url
-      body: JSON.stringify(data), // 本文のデータ型は "Content-Type" ヘッダーと一致する必要があります
+      body: JSON.stringify(data),
     });
-    return response.json(); // レスポンスの JSON を解析
+    return response.json();
   }
 
   return (
@@ -1059,19 +1166,65 @@ const App: React.FC = () => {
           </Toolbar>
         </AppBar>
       </div>
-      <div className={classes.root}>
+      <Typography variant='h5' gutterBottom className={classes.titleText}>
+        定形運用
+      </Typography>
+      <Divider variant='middle' />
+      <Typography variant='subtitle1' className={classes.titleText}>
+        実行日時の入力
+      </Typography>
+      <div className={classes.dateForm}>
+        <form noValidate autoComplete='off'>
+          <TextField
+            required
+            id='standard-basic'
+            value={executeDate}
+            label='YYYYMMDD'
+            InputLabelProps={{ shrink: true }}
+            variant='outlined'
+            onChange={handelExecuteDate}
+          />
+        </form>
+      </div>
+      <Typography variant='subtitle1' className={classes.titleText}>
+        入力ファイルのアップロード
+      </Typography>
+      <div className={classes.fileForm}>
+        <Input type='file' onChange={changeHandler} color='primary' />
+      </div>
+      <div className={classes.button}>
+        <Button onClick={handleSubmission} variant='contained' color='primary'>
+          アップロード
+        </Button>
+      </div>
+      <Typography variant='subtitle1' className={classes.titleText}>
+        定形運用の実行
+      </Typography>
+      <div className={classes.button}>
         <Button
           onClick={() =>
-            postData('http://localhost:8000/hello', { test: 'hhhe' }).then(
-              (data) => {
-                console.log(data); // `data.json()` の呼び出しで解釈された JSON データ
-              }
-            )
+            postData('http://localhost:8000/api/v1/execute-trial-operation', {
+              target_date: executeDate,
+            }).then((result) => {
+              console.log(result);
+            })
           }
           variant='contained'
           color='primary'
         >
-          Upload
+          予測実行
+        </Button>
+      </div>
+      <Typography variant='subtitle1' className={classes.titleText}>
+        予測結果のダウンロード
+      </Typography>
+      <div className={classes.button}>
+        <Button
+          variant='contained'
+          color='primary'
+          href='http://localhost:8000/api/v1/download'
+        >
+          ダウンロード
         </Button>
       </div>
     </>
@@ -1084,61 +1237,66 @@ export default App;
 
 画面は以下のようなイメージになります。
 
-TODO；フロントエンド画面の GIF
+![front_end](/Users/koyajima/Code/between_poc_and_production/images/front_end.png)
 
 #### テスト運用フェーズ 3：クラウドへの移行と運用自動化
 
 ##### このフェーズでの目的
 
-フェーズ 3 では、さらなる運用の自動化に向けて、サーバなどの計算機をクラウドに移したり、一部の機能をマネージドサービスに移していきます。クラウドを使う目的は、インフラを
+フェーズ 3 では、さらなる運用の自動化に向けて、サーバをクラウドに移したり、一部の機能をマネージドサービスに移していきます。クラウドを使う目的は、インフラの運用をクラウドに任せることにより、インフラのレイヤーでの可用性を高めたり、インフラの保守でなくアプリのエンハンスやメンテナンスに時間をかけられるようにすることです。2021年1月現在で機械学習システムの運用基盤として利用しやすいクラウドとしては、AWS、GCP、Azure があると思います。基本的な機能はどのクラウドにも共通していますが、それぞれ特長・特色が異なるので、比較検討してみるのが良いと思います。
 
-本記事では例として AWS を利用します。
+本記事では例としてAWSへの移行を簡単に検討してみます。移行例は2つあり、まずテスト運用フェーズ2までに作成したシステムをそのままAWSに移行するパターン1と、そこから更に自動化を行ったパターン2を記載します。
 
-##### このフェーズでのアーキテクチャ
+##### AWS(Amazon Web Service) でのアーキテクチャパターン1：EC2のみのシンプルな構成
 
-TODO：図 EC2, S3, Lambda, SNS
+各サーバを EC2 上に構築し、データはEBSに格納します。使用感はローカルで動かすLinuxとほぼ同じため、移行は難しくないです。しかしながら、入力データのアップロードや予測結果のダウンロードは依然手動で行う必要があります。また、システムの各機能はこれまで作ったものをそのままEC2で動かしているだけなので、エンハンス・メンテナンスのしやすさはあまり変わっていません。
 
-各サーバを EC2 上に構築し、
+![architecture_trial3_aws1](/Users/koyajima/Code/between_poc_and_production/images/architecture_trial3_aws1.png)
+
+##### AWS(Amazon Web Service) でのアーキテクチャパターン1：更に自動化した構成
+
+このパターン2では、パターン1で課題だった以下の点を改善しています。
+
+- データ入出力の自動化
+- 一部の機能を個別のプログラム・サービスに分割
+
+まずデータ入出力の自動化ですが、共有フォルダとしてS3を使うことで、外部システムとのやり取りの窓口を作ります。CloudWatch・CloudTrailを使ってS3へのデータ入出力を監視し、Lambdaを使って予測実行コマンドを発行することで、入力ファイルの格納をトリガーとして予測システムを実行できます。この仕組みがあれば、GUIやWebサーバを立てる必要がなくなります。クラウド上にWebサーバを立てると、認証機能や脆弱性対策が必要となるので、これらのリスクを抑えることもできます。
+
+また、一部の機能を個別のプログラム・サービスに分割に関しては、以下のことを行いました
+
+- 入出力ファイルの格納場所をS3に変更
+- システム実行のトリガープログラムをLambdaに移行
+- 成功・失敗通知のプログラムをLambda・SNSに移行
+
+今回分割できた範囲はあまり広くありませんが、他のサービスを使うことで更にプログラムを分割し、エンハンス・メンテナンスがしやすくできると思います。ただし、あまり広げすぎるとベンダーロックインになりかねないので、移行容易性も合わせて検討する必要があります。
+
+![architecture_trial3_aws2](/Users/koyajima/Code/between_poc_and_production/images/architecture_trial3_aws2.png)
 
 ### 本番運用に向けて
 
-この章では、本番運用に向けて検討すべきことをリストアップする
+この章では、本番運用に向けて検討すべきことをリストアップしていきます。
 
-#### データの補完方法に関して
+#### クラウドの活用
 
-parquet,csv,pkl の比較
+テスト運用フェーズ3ではクラウドへの移行を行いましたが、クラウドには他にも様々な機能があるため、移植性を大きく損なわない範囲に活用すると良いです。例えば社内の認証機能とクラウドの認証機能を結びつけてデータガバナンスを導入したり、オートスケーリング機能を活用してより大きな規模のデータを所定の時間内に処理するなどがあります。
 
-#### データ連携に関して
+また、自前のコードを極力排除して、マネージドサービスに移行することも大切です。長期に渡って運用していくことを考えると、自前のコードはメンテナンス性が低く、また属人的でもあるので、似たサービスがあれば活用することも検討すべきです。例えばAirflowはGCPの「Cloud Composer」やAWSの「Amazon Managed Workflows for Apache Airflow」といったマネージドサービスがあるので、これらを使うことも一考の余地があります。
 
-審査部門とのデータのやり取りを自動化する
+#### プログラムの再利用性
 
-#### プログラムの再利用性の向上
+本記事では一貫してJupyter Notebook での開発・運用を行ってきました。Jupyter Notebook は開発が簡単で便利な一方、Gitでの管理や実行、テストのし易さに難があります。開発スピードと品質の兼ね合いを見て、適宜pyファイルに移行していくと良いかもしれません。また、このシステム自体をDockerやKubernetes上に構築できれば、処理のスケーリングなどのシステムの堅牢性を高めるだけでなく、他の案件への展開が容易にできるため、ビジネス上のメリットも大きいはずです。
 
-Kubernetes、Docker を導入する
+#### データの保管方法
 
-#### クラウドのマネージドサービスの利用
+本記事ではデータはCSVまたはPickle形式で保管していましたが、どのデータをどの形式で保管するかは検討しておくと良いです。そのためにも、データパイプラインを策定した段階で、各データの定義書をスプレッドシートなどで管理すると後々役立ちます。筆者は、再作成が難しいデータ(入力データ)や外部との連携が必要なデータ(予測結果)はCSV、中間生成データはPickle形式で保管することが多いです。Pickle形式は便利な反面、汎用性や安全性に乏しいため、データ型を別途定義してCSVで補完するか、知見がある人は「Parquet」と使うと良いかもしれません。
 
-GCP
+#### データのモニタリング
 
-AWS
+機械学習システムを継続的に運用していくためには、システムだけでなく、データにも気を配る必要があります。例えば入力データの傾向が変わってしまうと、システムに問題はなくとも予測精度に大きな影響を与える可能性があります。そこで、入力データをモニタリングして、例えば各列のデータの分布やラベルとの関係性は変わっていないかをチェックすると良いです。また、作成しているシステムによっては公平な予測ができているか、例えば男女によって予測結果が大きく変わることはないかといった観点でも確認する必要があります。
 
-AzureML
+#### データのガバナンス
 
-#### データの安全性について
-
-男女差別がないか
-
-#### データドリフト
-
-分布が変わってないか、ラベルと特徴量の関係性は変わってないか
-
-#### データのガバナンスについて
-
-ログイン制御によるアクセス制御
-
-#### 処理のスケーリング
-
-Celery Executor
+PoCレベルであればデータへのアクセス権限は自然と絞られると思いますが、運用が長くなり、システムの関係者が多くなる場合は、データごとに適切なアクセス権限を設定する必要があります。このような場合には、クラウドサービスの認証機能を活用すると良いです。
 
 #### 本記事で利用したソフトウェアとそのバージョン
 
@@ -1148,36 +1306,38 @@ https://github.com/koyaaarr/between_poc_and_production
 
 | Software   | Version |
 | ---------- | ------- |
-| JupyterLab |         |
-| Airflow    | 2.0     |
-| MLflow     |         |
-| Papermill  |         |
-| FastAPI    |         |
-| React      |         |
-| Typescript |         |
-| PyCaret    |         |
-| pandas     |         |
-| bokeh      |         |
-|            |         |
+| JupyterLab | 2.1.5   |
+| Airflow    | 2.0.0   |
+| MLflow     | 1.13.1  |
+| papermill  | 2.2.2   |
+| FastAPI    | 0.63.0  |
+| React      | 17.0.1  |
+| Typescript | 4.1.3   |
+| PyCaret    | 2.2.3   |
+| pandas     | 1.1.4   |
+| Bokeh      | 2.2.3   |
 
-####
 
-### 参考文献
+
+### 参考にした文献
 
 #### 機械学習プロジェクトの進め方に関して
 
-- データ分析・AI のビジネス導入
-- 仕事ではじめる機械学習
+- データ分析・AI のビジネス導入 (https://www.amazon.co.jp/dp/4627854110)
+- 仕事ではじめる機械学習 (https://www.amazon.co.jp/dp/4873118255)
 
 #### データ分析の技術に関して
 
-- 前処理大全
-- Kaggle で勝つデータ分析の技術
-- 機械学習のための特徴量エンジニアリング
+- 前処理大全 (https://www.amazon.co.jp/dp/4774196479)
+- Kaggle で勝つデータ分析の技術 (https://www.amazon.co.jp/dp/4297108437)
+- 機械学習のための特徴量エンジニアリング (https://www.amazon.co.jp/dp/4873118689)
+
+#### ユーザーインターフェースに関して
+
+- Material UI (https://material-ui.com/)
 
 #### 機械学習 PoC システムの設計に関して
 
-- データ指向アプリケーションデザイン
-- Netflix
-- リブセンス
-- リクルート住まいカンパニー
+- Beyond Interactive: Notebook Innovation at Netflix (https://netflixtechblog.com/notebook-innovation-591ee3221233)
+- Airflow を用いたデータフロー分散処理 (https://analytics.livesense.co.jp/entry/2018/02/06/132842)
+- Jupyter だけで機械学習を実サービス展開できる基盤 (https://engineer.recruit-lifestyle.co.jp/techblog/2018-10-04-ml-platform/)
