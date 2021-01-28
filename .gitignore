@@ -9,6 +9,7 @@ mlruns
 data
 
 notebooks/poc/logs.log
+notebooks/trial/logs/*
 airflow/airflow.db
 
 *.pid
