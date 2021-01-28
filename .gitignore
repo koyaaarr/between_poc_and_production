@@ -15,3 +15,10 @@ airflow/airflow.db
 *.pyc
 
 *.pptx
+
+*.csv
+
+api/upload/*
+api/download/*
+
+.eslintcache
