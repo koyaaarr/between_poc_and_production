@@ -88,7 +88,7 @@ const App: React.FC = () => {
         </AppBar>
       </div>
       <Typography variant='h5' gutterBottom className={classes.titleText}>
-        定形運用
+        定型運用
       </Typography>
       <Divider variant='middle' />
       <Typography variant='subtitle1' className={classes.titleText}>
@@ -119,7 +119,7 @@ const App: React.FC = () => {
         </Button>
       </div>
       <Typography variant='subtitle1' className={classes.titleText}>
-        定形運用の実行
+        定型運用の実行
       </Typography>
       <div className={classes.button}>
         <Button

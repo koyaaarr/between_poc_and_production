@@ -11,7 +11,7 @@ args = {
 dag = DAG(
     dag_id="trial_operation",
     default_args=args,
-    schedule_interval=None,
+    schedule_interval=None,  # スケジュール実行したい場合は"0 0 0 * *"のようにcron式で定義する
     start_date=days_ago(2),
     dagrun_timeout=timedelta(minutes=60),
     # tags=[],
