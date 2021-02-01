@@ -88,11 +88,11 @@ const App: React.FC = () => {
         </AppBar>
       </div>
       <Typography variant='h5' gutterBottom className={classes.titleText}>
-        定型運用
+        Regular Operation
       </Typography>
       <Divider variant='middle' />
       <Typography variant='subtitle1' className={classes.titleText}>
-        実行日時の入力
+        Input execution date
       </Typography>
       <div className={classes.dateForm}>
         <form noValidate autoComplete='off'>
@@ -108,18 +108,18 @@ const App: React.FC = () => {
         </form>
       </div>
       <Typography variant='subtitle1' className={classes.titleText}>
-        入力ファイルのアップロード
+        Upload input file
       </Typography>
       <div className={classes.fileForm}>
         <Input type='file' onChange={changeHandler} color='primary' />
       </div>
       <div className={classes.button}>
         <Button onClick={handleSubmission} variant='contained' color='primary'>
-          アップロード
+          Upload
         </Button>
       </div>
       <Typography variant='subtitle1' className={classes.titleText}>
-        定型運用の実行
+        Execute Regular Operation
       </Typography>
       <div className={classes.button}>
         <Button
@@ -133,11 +133,11 @@ const App: React.FC = () => {
           variant='contained'
           color='primary'
         >
-          予測実行
+          Execute
         </Button>
       </div>
       <Typography variant='subtitle1' className={classes.titleText}>
-        予測結果のダウンロード
+        Download Predict file
       </Typography>
       <div className={classes.button}>
         <Button
@@ -145,7 +145,7 @@ const App: React.FC = () => {
           color='primary'
           href='http://localhost:8000/api/v1/download'
         >
-          ダウンロード
+          Download
         </Button>
       </div>
     </>
